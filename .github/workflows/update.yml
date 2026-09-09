@@ -40,8 +40,14 @@ jobs:
           fi
           fdroid update -c
 
-      - name: Deploy to GitHub Pages via Branch
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: repo
-          branch: gh-pages
+      - name: Deploy to GitHub Pages manually
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          cd repo
+          git init
+          git checkout -b gh-pages
+          git add .
+          git commit -m "Update F-Droid repository"
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push -f origin gh-pages
