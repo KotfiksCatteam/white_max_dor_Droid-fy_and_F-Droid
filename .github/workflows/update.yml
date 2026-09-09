@@ -1,8 +1,6 @@
 name: Update F-Droid Repo
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
 
 permissions:
@@ -25,36 +23,51 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fdroidserver
 
-      - name: Download APK and Make Repo safely
+      - name: Generate clean F-Droid Repo
         run: |
-          # Создаем папки
           mkdir -p repo
-          mkdir -p downloads
-          
-          # Скачиваем APK во временную папку вне репозитория
-          URL=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep "browser_download_url" | cut -d '"' -f 4 | grep ".apk" | head -n 1)
-          echo "Downloading from: $URL"
-          curl -L -o downloads/app.apk "$URL"
-          
-          # Переходим в репозиторий и инициализируем
           cd repo
           if [ ! -f "config.py" ]; then
               fdroid init
           fi
           
-          # Копируем APK в папку repo/repo для индексации, но саму папку с APK не будем коммитить
-          mkdir -p ../repo/repo
-          cp ../downloads/app.apk ../repo/repo/
+          # Получаем прямую ссылку на релиз и имя файла через GitHub API
+          APK_URL=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep "browser_download_url" | cut -d '"' -f 4 | grep ".apk" | head -n 1)
+          VERSION=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
           
-          # Обновляем индекс (fdroid подтянет его из локальной подпапки)
+          echo "Using APK URL: $APK_URL for version $VERSION"
+          
+          # Создаем metadata для приложения, чтобы F-Droid знал откуда качать APK напрямую (без загрузки файла в репозиторий)
+          mkdir -p metadata
+          cat <<EOF > metadata/com.whitemax.mod.txt
+          Categories: Games
+          License: GPL-3.0-or-later
+          WebSite: https://github.com/WhiteMAX-Mod/whitemaxmod
+          SourceCode: https://github.com/WhiteMAX-Mod/whitemaxmod
+          IssueTracker: https://github.com/WhiteMAX-Mod/whitemaxmod/issues
+          Summary: WhiteMAX Mod
+          Description: Automatically synced F-Droid repository.
+          
+          Builds:
+            - versionaliname: $VERSION
+              versioncode: 1
+              commit: $VERSION
+              subdir: .
+              gradle:
+                - yes
+          
+          Auto Update Mode: Static
+          Update Check Mode: None
+          Current Version: $VERSION
+          Current Version Code: 1
+          EOF
+
+          # Обновляем индекс без локальных APK файлов
           fdroid update -c
-          
-          # Удаляем тяжелый APK файл из папки repo перед деплоем
-          rm -rf repo/app.apk
-          rm -f ../downloads/app.apk
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: repo
           branch: gh-pages
+          exclude-assets: "app.apk"
