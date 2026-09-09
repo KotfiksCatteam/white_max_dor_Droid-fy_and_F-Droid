@@ -23,7 +23,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fdroidserver
 
-      - name: Generate clean F-Droid Repo
+      - name: Generate Repo and Purge APK
         run: |
           mkdir -p repo
           cd repo
@@ -31,43 +31,25 @@ jobs:
               fdroid init
           fi
           
-          # Получаем прямую ссылку на релиз и имя файла через GitHub API
-          APK_URL=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep "browser_download_url" | cut -d '"' -f 4 | grep ".apk" | head -n 1)
-          VERSION=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+          # Скачиваем APK для генерации индекса
+          URL=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep "browser_download_url" | cut -d '"' -f 4 | grep ".apk" | head -n 1)
+          curl -L -o app.apk "$URL"
           
-          echo "Using APK URL: $APK_URL for version $VERSION"
-          
-          # Создаем metadata для приложения, чтобы F-Droid знал откуда качать APK напрямую (без загрузки файла в репозиторий)
-          mkdir -p metadata
-          cat <<EOF > metadata/com.whitemax.mod.txt
-          Categories: Games
-          License: GPL-3.0-or-later
-          WebSite: https://github.com/WhiteMAX-Mod/whitemaxmod
-          SourceCode: https://github.com/WhiteMAX-Mod/whitemaxmod
-          IssueTracker: https://github.com/WhiteMAX-Mod/whitemaxmod/issues
-          Summary: WhiteMAX Mod
-          Description: Automatically synced F-Droid repository.
-          
-          Builds:
-            - versionaliname: $VERSION
-              versioncode: 1
-              commit: $VERSION
-              subdir: .
-              gradle:
-                - yes
-          
-          Auto Update Mode: Static
-          Update Check Mode: None
-          Current Version: $VERSION
-          Current Version Code: 1
-          EOF
-
-          # Обновляем индекс без локальных APK файлов
+          # Обновляем индекс
           fdroid update -c
+          
+          # УБИВАЕМ APK НАВСЕГДА перед коммитом, чтобы он физически исчез
+          find . -name "*.apk" -delete
+          rm -f app.apk
 
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: repo
-          branch: gh-pages
-          exclude-assets: "app.apk"
+      - name: Force Push Clean Repo via Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          cd repo
+          git init
+          git checkout -b gh-pages
+          git add -A
+          git commit -m "Update F-Droid index (no heavy apks)"
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push -f origin gh-pages
