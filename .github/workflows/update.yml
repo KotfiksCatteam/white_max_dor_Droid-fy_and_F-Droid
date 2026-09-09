@@ -25,16 +25,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fdroidserver
 
-      - name: Download APK and Make Repo
+      - name: Download APK and Make Repo safely
         run: |
+          # Создаем папки
           mkdir -p repo
+          mkdir -p downloads
+          
+          # Скачиваем APK во временную папку вне репозитория
           URL=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep "browser_download_url" | cut -d '"' -f 4 | grep ".apk" | head -n 1)
-          curl -L -o repo/app.apk "$URL"
+          echo "Downloading from: $URL"
+          curl -L -o downloads/app.apk "$URL"
+          
+          # Переходим в репозиторий и инициализируем
           cd repo
-          if [ ! -f "config.py" ]; then fdroid init; fi
+          if [ ! -f "config.py" ]; then
+              fdroid init
+          fi
+          
+          # Копируем APK в папку repo/repo для индексации, но саму папку с APK не будем коммитить
+          mkdir -p ../repo/repo
+          cp ../downloads/app.apk ../repo/repo/
+          
+          # Обновляем индекс (fdroid подтянет его из локальной подпапки)
           fdroid update -c
-          # Удаляем тяжелый APK файл, чтобы не превысить лимит GitHub в 100 МБ
-          rm -f app.apk
+          
+          # Удаляем тяжелый APK файл из папки repo перед деплоем
+          rm -rf repo/app.apk
+          rm -f ../downloads/app.apk
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
