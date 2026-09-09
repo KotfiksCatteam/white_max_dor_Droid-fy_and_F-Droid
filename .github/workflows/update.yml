@@ -1,1 +1,45 @@
+name: Update F-Droid Repo
 
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install fdroidserver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fdroidserver
+
+      - name: Download latest APK from upstream
+        run: |
+          mkdir -p repo
+          URL=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep "browser_download_url" | cut -d '"' -f 4 | grep ".apk" | head -n 1)
+          echo "Downloading from: $URL"
+          curl -L -o repo/app.apk "$URL"
+
+      - name: Initialize and Update F-Droid repo
+        run: |
+          cd repo
+          if [ ! -f "config.py" ]; then
+              fdroid init
+          fi
+          fdroid update -c
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./repo
+          keep_files: false
