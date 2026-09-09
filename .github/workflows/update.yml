@@ -1,8 +1,6 @@
 name: Update F-Droid Repo
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
   workflow_dispatch:
 
 permissions:
@@ -25,22 +23,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fdroidserver
 
-      - name: Download latest APK from upstream
+      - name: Download APK and Make Repo
         run: |
           mkdir -p repo
           URL=$(curl -s https://api.github.com/repos/WhiteMAX-Mod/whitemaxmod/releases/latest | grep "browser_download_url" | cut -d '"' -f 4 | grep ".apk" | head -n 1)
-          echo "Downloading from: $URL"
           curl -L -o repo/app.apk "$URL"
-
-      - name: Initialize and Update F-Droid repo
-        run: |
           cd repo
-          if [ ! -f "config.py" ]; then
-              fdroid init
-          fi
+          if [ ! -f "config.py" ]; then fdroid init; fi
           fdroid update -c
 
-      - name: Deploy to GitHub Pages manually
+      - name: Push directly to gh-pages
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -48,6 +40,6 @@ jobs:
           git init
           git checkout -b gh-pages
           git add .
-          git commit -m "Update F-Droid repository"
+          git commit -m "Update F-Droid repo"
           git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           git push -f origin gh-pages
